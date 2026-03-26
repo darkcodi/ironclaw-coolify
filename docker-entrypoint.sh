@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+mkdir -p "${HOME}/.ironclaw"
+umask 077
+
+cat > "${HOME}/.ironclaw/.env" <<EOF
+DATABASE_URL=${DATABASE_URL:-}
+LLM_BACKEND=${LLM_BACKEND:-openai}
+OPENAI_API_KEY=${OPENAI_API_KEY:-}
+SECRETS_MASTER_KEY=${SECRETS_MASTER_KEY:-}
+SANDBOX_ENABLED=${SANDBOX_ENABLED:-false}
+ONBOARD_COMPLETED=${ONBOARD_COMPLETED:-true}
+HTTP_HOST=${HTTP_HOST:-0.0.0.0}
+HTTP_PORT=${HTTP_PORT:-8081}
+HTTP_WEBHOOK_SECRET=${HTTP_WEBHOOK_SECRET:-}
+GATEWAY_ENABLED=${GATEWAY_ENABLED:-true}
+GATEWAY_HOST=${GATEWAY_HOST:-127.0.0.1}
+GATEWAY_PORT=${GATEWAY_PORT:-3000}
+GATEWAY_AUTH_TOKEN=${GATEWAY_AUTH_TOKEN:-}
+EOF
+
+chmod 600 "${HOME}/.ironclaw/.env"
+
+export PORT="${PORT:-8080}"
+export GATEWAY_ENABLED="${GATEWAY_ENABLED:-true}"
+export GATEWAY_HOST="${GATEWAY_HOST:-127.0.0.1}"
+export GATEWAY_PORT="${GATEWAY_PORT:-3000}"
+export HTTP_HOST="${HTTP_HOST:-0.0.0.0}"
+export HTTP_PORT="${HTTP_PORT:-8081}"
+export ONBOARD_COMPLETED="${ONBOARD_COMPLETED:-true}"
+
+ironclaw &
+IRONCLAW_PID=$!
+
+sleep 5
+caddy run --config /etc/caddy/Caddyfile --adapter caddyfile &
+CADDY_PID=$!
+
+cleanup() {
+  kill "$CADDY_PID" "$IRONCLAW_PID" 2>/dev/null || true
+}
+
+trap cleanup SIGINT SIGTERM
+
+wait -n "$IRONCLAW_PID" "$CADDY_PID"
+exit $?
